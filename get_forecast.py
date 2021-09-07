@@ -241,8 +241,8 @@ def calc_forecast(boto3_session):
 def format_rows(output,account_width):
     #print the heading
     mtd_width=8
-    forecast_width=8
-    change_width=6
+    forecast_width=10
+    change_width=8
 
     output_rows=[]
 
@@ -286,7 +286,8 @@ def publish_forecast(boto3_session) :
     output = calc_forecast(boto3_session)
     formated_rows = format_rows(output, account_width)
 
-    message=""
+    message = ""
+    message += "```\n"
     for line in formated_rows :
         formated_line=""
         for column in columns_displayed :
@@ -295,8 +296,10 @@ def publish_forecast(boto3_session) :
             formated_line += line.get(column)
         message += formated_line.rstrip() + "\n"
 
-    message +="\n_Keep in mind that using AWS Savings Plans can imply strong"
-    message +="costs variations in sub-accounts (thresold effect)._\n"
+    message += "```\n"
+
+    message +="\nKeep in mind that using AWS Savings Plans can imply strong "
+    message +="costs variations in sub-accounts (thresold effect).\n"
 
     display_output(message)
 
