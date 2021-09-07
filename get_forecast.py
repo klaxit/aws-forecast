@@ -7,19 +7,15 @@ Commandline:
 python3 get_forecast.py
 
 Environment Variables:
-    GET_FORECAST_COLUMNS_DISPLAYED - specify columnns and order
+    SLACK_WEBHOOK_URL - URL of the Slack webhook where the report is sent
+
+    FORECAST_COLUMNS_DISPLAYED - specify columnns and order
         default: "Account,M-1,MTD,Forecast,Change"
 
-    GET_FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name
+    FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name
         default: 22
 
-    AWS_LAMBDA_FUNCTION_NAME - set if running in lambda, allows us to re-use the same .py on commandline for testing
-    GET_FORECAST_AWS_PROFILE - set for test on command line
-
-References
-  * Calling Cost Explorer: https://aws.amazon.com/blogs/aws-cost-management/update-cost-explorer-forecasting-api-improvement/
-  * Setup SNS: https://docs.aws.amazon.com/sns/latest/dg/sns-getting-started.html
-  * Setup Slack as SNS subscriber: https://medium.com/cohealo-engineering/how-set-up-a-slack-channel-to-be-an-aws-sns-subscriber-63b4d57ad3ea
+    FORECAST_AWS_PROFILE - set for test on command line
 
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -49,49 +45,16 @@ from botocore.exceptions import ClientError
 import json
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-from base64 import b64decode
 
 # Initialize you log configuration using the base class
 logging.basicConfig(level = logging.INFO)
 logger = logging.getLogger()
-
-
-AWSGENIE_SECRET_MANAGER="awsgenie_secret_manager"
-SLACK_SECRET_KEY_NAME="slack_url"
-SNS_SECRET_KEY_NAME="sns_arn"
 
 AWS_LAMBDA_FUNCTION_NAME = ""
 try:
     AWS_LAMBDA_FUNCTION_NAME = os.environ['AWS_LAMBDA_FUNCTION_NAME']
 except Exception as e:
     logger.info("Not running as lambda")
-
-
-def get_secret(sm_client,secret_key_name):
-    # if AWS_LAMBDA_FUNCTION_NAME == "":
-    try:
-        text_secret_data = ""
-        get_secret_value_response = sm_client.get_secret_value( SecretId=AWSGENIE_SECRET_MANAGER )
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ResourceNotFoundException':
-            logger.error("The requested secret " + secret_name + " was not found")
-        elif e.response['Error']['Code'] == 'InvalidRequestException':
-            logger.error("The request was invalid due to:", e)
-        elif e.response['Error']['Code'] == 'InvalidParameterException':
-            logger.error("The request had invalid params:", e)
-
-    # Secrets Manager decrypts the secret value using the associated KMS CMK
-    # Depending on whether the secret was a string or binary, only one of these fields will be populated
-    if 'SecretString' in get_secret_value_response:
-        text_secret_data = json.loads(get_secret_value_response['SecretString']).get(secret_key_name)
-    else:
-        #binary_secret_data = get_secret_value_response['SecretBinary']
-        logger.error("Binary Secrets not supported")
-
-        # Your code goes here.
-    return text_secret_data
-    # else:
-    #     return ""
 
 def send_slack(slack_url, message):
     #make it a NOP if URL is NULL
@@ -114,35 +77,11 @@ def send_slack(slack_url, message):
         logger.error("Server connection failed: %s", e.reason)
         logger.error("slack_url= %s", slack_url)
 
-def send_sns(boto3_session, sns_arn, message):
-    #make it a NOP if URL is NULL
-    if sns_arn == "":
-        return
-
-    try:
-        sns_client = boto3_session.client('sns')
-        response = sns_client.publish(
-            TopicArn=sns_arn,
-            Message=message
-        )
-    except Exception as e:
-        logger.error("SNS publish request failed ARN: %s", sns_arn)
-        logger.error(e)
-
-
-def display_output(boto3_session, message):
-    secrets_manager_client = boto3_session.client('secretsmanager')
-    try:
-        slack_url='https://' + get_secret(secrets_manager_client, SLACK_SECRET_KEY_NAME)
-        send_slack(slack_url, message)
-    except Exception as e:
-        logger.info("Disabling Slack, URL not found")
-
-    try:
-        sns_arn=get_secret(secrets_manager_client, SNS_SECRET_KEY_NAME)
-        send_sns(boto3_session, sns_arn, message)
-    except Exception as e:
-        logger.info("Disabling SNS, Arn not found")
+def display_output(message):
+    if 'SLACK_WEBHOOK_URL' in os.environ:
+      send_slack(os.environ['SLACK_WEBHOOK_URL'], message)
+    else:
+      logger.info("Disabling Slack, URL not found")
 
     print(message)
 
@@ -284,7 +223,7 @@ def calc_forecast(boto3_session):
 
             try:
                 account_name=org.describe_account(AccountId=linked_account)['Account']['Name']
-            except AWSOrganizationsNotInUseException as e:
+            except Exception as e:
                 account_name=linked_account
 
             result = {
@@ -336,13 +275,13 @@ def format_rows(output,account_width):
 def publish_forecast(boto3_session) :
     #read params
     columns_displayed = ["Account", "M-1", "MTD", "Forecast", "Change"]
-    if 'GET_FORECAST_COLUMNS_DISPLAYED' in os.environ:
-        columns_displayed=os.environ['GET_FORECAST_COLUMNS_DISPLAYED']
+    if 'FORECAST_COLUMNS_DISPLAYED' in os.environ:
+        columns_displayed=os.environ['FORECAST_COLUMNS_DISPLAYED']
         columns_displayed = columns_displayed.split(',')
 
     account_width=22
-    if 'GET_FORECAST_ACCOUNT_COLUMN_WIDTH' in os.environ:
-        account_width=os.environ['GET_FORECAST_ACCOUNT_COLUMN_WIDTH']
+    if 'FORECAST_ACCOUNT_COLUMN_WIDTH' in os.environ:
+        account_width=os.environ['FORECAST_ACCOUNT_COLUMN_WIDTH']
 
     output = calc_forecast(boto3_session)
     formated_rows = format_rows(output, account_width)
@@ -355,33 +294,31 @@ def publish_forecast(boto3_session) :
                 formated_line += " "
             formated_line += line.get(column)
         message += formated_line.rstrip() + "\n"
-    display_output(boto3_session, message)
+
+    message +="\n_Keep in mind that using AWS Savings Plans can imply strong"
+    message +="costs variations in sub-accounts (thresold effect)._\n"
+
+    display_output(message)
 
 def lambda_handler(event, context):
-    try:
-        publish_forecast(boto3)
-    except Exception as e:
-        print(e)
-        raise Exception("Cannot connect to Cost Explorer with boto3")
+  boto3_session = boto3.session.Session()
+  publish_forecast(boto3)
 
 def main():
-    try:
-        boto3_session = boto3.session.Session()
-        if 'GET_FORECAST_AWS_PROFILE' in os.environ:
-            profile_name=os.environ['GET_FORECAST_AWS_PROFILE']
-            logger.info("Setting AWS Proflie ="+profile_name)
-            boto3_session = boto3.session.Session(profile_name=profile_name)
+  try:
+    boto3_session = boto3.session.Session()
 
-        try:
-            publish_forecast(boto3_session)
-        except Exception as e:
-            raise e
+    if 'FORECAST_AWS_PROFILE' in os.environ:
+      profile_name=os.environ['FORECAST_AWS_PROFILE']
+      logger.info("Setting AWS Proflie ="+profile_name)
+      boto3_session = boto3.session.Session(profile_name=profile_name)
 
-    except Exception as e:
-        logger.error(e);
-        sys.exit(1)
+    publish_forecast(boto3)
+  except Exception as e:
+      logger.error(e);
+      sys.exit(1)
 
-    sys.exit(0)
+  sys.exit(0)
 
 if __name__ == '__main__':
     main()
