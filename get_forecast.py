@@ -7,11 +7,11 @@ Commandline:
 python3 get_forecast.py
 
 Environment Variables:
-    GET_FORECAST_COLUMNS_DISPLAYED - specify columnns and order 
-        default: "Account,MTD,Forecast,Change"
+    GET_FORECAST_COLUMNS_DISPLAYED - specify columnns and order
+        default: "Account,M-1,MTD,Forecast,Change"
 
     GET_FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name
-        default: 17
+        default: 22
 
     AWS_LAMBDA_FUNCTION_NAME - set if running in lambda, allows us to re-use the same .py on commandline for testing
     GET_FORECAST_AWS_PROFILE - set for test on command line
@@ -55,7 +55,7 @@ from base64 import b64decode
 logging.basicConfig(level = logging.INFO)
 logger = logging.getLogger()
 
-    
+
 AWSGENIE_SECRET_MANAGER="awsgenie_secret_manager"
 SLACK_SECRET_KEY_NAME="slack_url"
 SNS_SECRET_KEY_NAME="sns_arn"
@@ -164,7 +164,7 @@ def calc_forecast(boto3_session):
     }
 
     utcnow = datetime.datetime.utcnow()
-    today = utcnow.strftime('%Y-%m-%d') 
+    today = utcnow.strftime('%Y-%m-%d')
     first_day_of_month = utcnow.strftime('%Y-%m') + "-01"
     first_day_next_month = (utcnow + relativedelta(months=1)).strftime("%Y-%m-01")
     first_day_prior_month = (utcnow + relativedelta(months=-1)).strftime("%Y-%m-01")
@@ -210,6 +210,7 @@ def calc_forecast(boto3_session):
 
     result = {
         "account_name": 'Total',
+        "amount_usage_prior_month": amount_usage_prior_month,
         "amount_usage": amount_usage,
         "amount_forecast": amount_forecast,
         "forecast_variance": forecast_variance
@@ -240,7 +241,7 @@ def calc_forecast(boto3_session):
         for group in result_by_time['Groups']:
             amount_usage = float(group['Metrics']['UnblendedCost']['Amount'])
             linked_account = group['Keys'][0]
-            
+
             #create filter
             linked_account_filter = {
                 "And": [
@@ -255,7 +256,7 @@ def calc_forecast(boto3_session):
                     not_filter
                 ]
             }
-            
+
             #get prior-month usage, it may not exist
             try:
                 data = ce.get_cost_and_usage(
@@ -263,7 +264,7 @@ def calc_forecast(boto3_session):
                     , Granularity='MONTHLY', Metrics=['UnblendedCost'], Filter=linked_account_filter
                     )
                 results = data['ResultsByTime']
-                amount_usage_prior_month = float(results[0]['Total']['UnblendedCost']['Amount']) 
+                amount_usage_prior_month = float(results[0]['Total']['UnblendedCost']['Amount'])
             except Exception as e:
                 amount_usage_prior_month = 0
 
@@ -281,13 +282,14 @@ def calc_forecast(boto3_session):
             if amount_usage_prior_month > 0 :
                 variance = (amount_forecast-amount_usage_prior_month) / amount_usage_prior_month *100
 
-            try: 
+            try:
                 account_name=org.describe_account(AccountId=linked_account)['Account']['Name']
             except AWSOrganizationsNotInUseException as e:
                 account_name=linked_account
 
             result = {
                 "account_name": account_name,
+                "amount_usage_prior_month": amount_usage_prior_month,
                 "amount_usage": amount_usage,
                 "amount_forecast": amount_forecast,
                 "forecast_variance": variance
@@ -307,6 +309,7 @@ def format_rows(output,account_width):
 
     row = {
         "Account": 'Account'.ljust(account_width),
+        "M-1": 'M-1'.rjust(mtd_width),
         "MTD": 'MTD'.rjust(mtd_width),
         "Forecast": 'Forecast'.rjust(forecast_width),
         "Change": 'Change'.rjust(change_width)
@@ -321,22 +324,23 @@ def format_rows(output,account_width):
         change = "{0:,.1f}%".format(line.get('forecast_variance'))
         row = {
             "Account": line.get('account_name')[:account_width].ljust(account_width),
+            "M-1": "${0:,.0f}".format(line.get('amount_usage_prior_month')).rjust(mtd_width),
             "MTD": "${0:,.0f}".format(line.get('amount_usage')).rjust(mtd_width),
             "Forecast": "${0:,.0f}".format(line.get('amount_forecast')).rjust(forecast_width),
             "Change": change.rjust(change_width)
         }
         output_rows.append(row)
-        
+
     return output_rows
 
 def publish_forecast(boto3_session) :
     #read params
-    columns_displayed = ["Account", "MTD", "Forecast", "Change"]
+    columns_displayed = ["Account", "M-1", "MTD", "Forecast", "Change"]
     if 'GET_FORECAST_COLUMNS_DISPLAYED' in os.environ:
         columns_displayed=os.environ['GET_FORECAST_COLUMNS_DISPLAYED']
         columns_displayed = columns_displayed.split(',')
 
-    account_width=17
+    account_width=22
     if 'GET_FORECAST_ACCOUNT_COLUMN_WIDTH' in os.environ:
         account_width=os.environ['GET_FORECAST_ACCOUNT_COLUMN_WIDTH']
 

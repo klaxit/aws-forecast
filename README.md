@@ -1,8 +1,10 @@
 # aws-forecast
+
+Forked from its [original repository](https://github.com/klaxit/aws-forecast) and adapted to [@Klaxit](https://github.com/klaxit) needs. Many thanks to [@jimzucker](https://github.com/jimzucker) for sharing this!
 ## User Story
 I found myself logging in daily check our AWS spend and change to prior month to keep an eye on our AWS bill and decided to create a script to slack it one time per day to save time.
 
-So I set out to automate this as a slack post daily to save time.  While doing this I found that the actual and forecast with % change from prior month that we see at the top of Cost Explorer are not directly available from the Cost Explorer API.  
+So I set out to automate this as a slack post daily to save time.  While doing this I found that the actual and forecast with % change from prior month that we see at the top of Cost Explorer are not directly available from the Cost Explorer API.
 
 ![Image of Cost Explorer](https://github.com/jimzucker/aws-forecast/blob/main/images/cost_explorer.png)
 
@@ -20,7 +22,7 @@ So I set out to automate this as a slack post daily to save time.  While doing t
 ### Environment Variables
 We use these to make it compatible with running the same script from Lambda and the commandline for testing
 
-	GET_FORECAST_COLUMNS_DISPLAYED - specify columnns to display and the order 
+	GET_FORECAST_COLUMNS_DISPLAYED - specify columnns to display and the order
 	    default: "Account,MTD,Forecast,Change"
 
 	GET_FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name for formatting
@@ -36,10 +38,10 @@ If you enter and slack URL and/or SNS it will publish in addition to logging.
 ![Cloud Formation Inputs ](https://github.com/jimzucker/aws-forecast/blob/main/images/cloudformation_inputs.png)
 
 	Note: The Cloud Formation loads the python script from a public S3 bucket, s3://jimzucker-github-getforecast/get_forecast.zip
-	
+
 ### Sample Output
 ![Sample Output of get_forecast](https://github.com/jimzucker/aws-forecast/blob/main/images/get_forecast_sample_output.png)
-	
+
 ### Command line (for development/testing)
 ```python3 get_forecast.py```
 
