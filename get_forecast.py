@@ -10,7 +10,7 @@ Environment Variables:
     SLACK_WEBHOOK_URL - URL of the Slack webhook where the report is sent
 
     FORECAST_COLUMNS_DISPLAYED - specify columnns and order
-        default: "Account,M-1,MTD,Forecast,Change"
+        default: "Account,M-1,Forecast,Change"
 
     FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name
         default: 22
@@ -240,17 +240,15 @@ def calc_forecast(boto3_session):
 
 def format_rows(output,account_width):
     #print the heading
-    mtd_width=8
-    forecast_width=10
+    cost_width=10
     change_width=8
 
     output_rows=[]
 
     row = {
         "Account": 'Account'.ljust(account_width),
-        "M-1": 'M-1'.rjust(mtd_width),
-        "MTD": 'MTD'.rjust(mtd_width),
-        "Forecast": 'Forecast'.rjust(forecast_width),
+        "M-1": 'M-1'.rjust(cost_width),
+        "Forecast": 'Forecast'.rjust(cost_width),
         "Change": 'Change'.rjust(change_width)
     }
     output_rows.append(row)
@@ -263,9 +261,8 @@ def format_rows(output,account_width):
         change = "{0:,.1f}%".format(line.get('forecast_variance'))
         row = {
             "Account": line.get('account_name')[:account_width].ljust(account_width),
-            "M-1": "${0:,.0f}".format(line.get('amount_usage_prior_month')).rjust(mtd_width),
-            "MTD": "${0:,.0f}".format(line.get('amount_usage')).rjust(mtd_width),
-            "Forecast": "${0:,.0f}".format(line.get('amount_forecast')).rjust(forecast_width),
+            "M-1": "${0:,.0f}".format(line.get('amount_usage_prior_month')).rjust(cost_width),
+            "Forecast": "${0:,.0f}".format(line.get('amount_forecast')).rjust(cost_width),
             "Change": change.rjust(change_width)
         }
         output_rows.append(row)
@@ -274,7 +271,7 @@ def format_rows(output,account_width):
 
 def publish_forecast(boto3_session) :
     #read params
-    columns_displayed = ["Account", "M-1", "MTD", "Forecast", "Change"]
+    columns_displayed = ["Account", "M-1", "Forecast", "Change"]
     if 'FORECAST_COLUMNS_DISPLAYED' in os.environ:
         columns_displayed=os.environ['FORECAST_COLUMNS_DISPLAYED']
         columns_displayed = columns_displayed.split(',')
