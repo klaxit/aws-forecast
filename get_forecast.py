@@ -9,6 +9,9 @@ python3 get_forecast.py
 Environment Variables:
     SLACK_WEBHOOK_URL - URL of the Slack webhook where the report is sent
 
+    ADDITIONAL_MRKDWN - Additionnal Slack mrkdwn that should be added
+    below the report.
+
     FORECAST_COLUMNS_DISPLAYED - specify columnns and order
         default: "Account,M-1,Forecast,Change"
 
@@ -62,8 +65,17 @@ def send_slack(slack_url, message):
         return
 
     slack_message = {
-        'text': message
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": message
+            }
+          }
+        ]
     }
+
 
     req = Request(slack_url, json.dumps(slack_message).encode('utf-8'))
     try:
@@ -295,8 +307,8 @@ def publish_forecast(boto3_session) :
 
     message += "```\n"
 
-    message +="\nKeep in mind that using AWS Savings Plans can imply strong "
-    message +="costs variations in sub-accounts (thresold effect).\n"
+    if 'ADDITIONAL_MRKDWN' in os.environ:
+      message += os.environ['ADDITIONAL_MRKDWN'].replace(r'\n', '\n')
 
     display_output(message)
 

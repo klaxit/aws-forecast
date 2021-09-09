@@ -21,17 +21,7 @@ So I set out to automate this as a slack post daily to save time.  While doing t
 See these instructions: [Click here](https://github.com/klaxit/aws-forecast/blob/main/MANUAL_SETUP_README.md)
 
 ### Environment Variables
-We use these to make it compatible with running the same script from Lambda and the commandline for testing
-
-	SLACK_WEBHOOK_URL - URL of the Slack webhook where the report is sent
-
-	FORECAST_COLUMNS_DISPLAYED - specify columnns to display and the order
-	    default: "Account,M-1,Forecast,Change"
-
-	FORECAST_ACCOUNT_COLUMN_WIDTH - max width for account name for formatting
-		default: 22
-
-	FORECAST_AWS_PROFILE - set for testing on command line to pick a profile from your credentials file
+See documentation at the top of `get_forecast.py`.
 ### Sample Output
 ![Sample Output of get_forecast](https://github.com/klaxit/aws-forecast/blob/main/images/get_forecast_sample_output.png)
 
